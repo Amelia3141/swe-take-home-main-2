@@ -1,7 +1,7 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 from typing import Any
 from .base import BaseLM
-#from ._retry import retry
+from ._retry import async_retry, RetryConfig
 
 
 def is_openai_model(model_name: str) -> bool:
@@ -23,14 +23,15 @@ class OpenaiLM(BaseLM):
     This implements an interface for querying OpenAI models.
     """
 
-    client: OpenAI
+    client: AsyncOpenAI
 
     def __init__(self, model_name: str, api_key: str):
         self.model_name = model_name
-        self.client = OpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(api_key=api_key)
 
-    def generate(self, prompt: str, model_args: dict[str, Any] = {}) -> str:
-        response = self.client.chat.completions.create(
+    async def generate(self, prompt: str, model_args: dict[str, Any] = {}) -> str:
+        response = await async_retry(
+            self.client.chat.completions.create,
             model=self.model_name,
             messages=[
                 {

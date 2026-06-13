@@ -1,0 +1,3 @@
+{"QUESTION": "I want a cat or a dog but I can't have a cat so I got a", "ANSWER": "dog", "index": 0, "model_output": "mocked response", "grader_output": "mocked response", "grade": "eval_error"}
+{"QUESTION": "I have one apple and one orange, so the number of fruit I have is", "ANSWER": "two", "index": 1, "model_output": "mocked response", "grader_output": "mocked response", "grade": "eval_error"}
+{"QUESTION": "I am either inside or outside. I am not inside so I am", "ANSWER": "outside", "index": 2, "model_output": "mocked response", "grader_output": "mocked response", "grade": "eval_error"}

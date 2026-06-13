@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from evals.runner import Runner
 from models.models import get_model
-
+from evals.metadata import write_run_metadata
 
 def load_dataset(path: str, start_index: int, end_index: int) -> list[dict]:
     dataset = pd.read_csv(path).to_dict("records")
@@ -53,7 +53,26 @@ def get_parser():
 
     # Grader model configuration
     parser.add_argument("--grader_temperature", type=float, default=1.0)
+      # Checkpoint configuration
+    parser.add_argument(
+        "--checkpoint_file",
+        type=str,
+        default=None,
+        help="JSONL checkpoint path for resumable runs",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from an existing checkpoint, skipping completed rows",
+    )
 
+    # Concurrency
+    parser.add_argument(
+        "--max_concurrency",
+        type=int,
+        default=8,
+        help="Max requests in flight at once (default: 8)",
+    )
     # Dataset configurations
     parser.add_argument(
         "--question_prompt_template",
@@ -99,7 +118,8 @@ async def main(args):
     question_prompt_template = open(args.question_prompt_template, mode="r").read()
     evaluation_prompt_template = open(args.evaluation_prompt_template, mode="r").read()
     dataset = load_dataset(args.eval_dataset, args.start_index, args.end_index)
-
+    meta_path = write_run_metadata(args, args.output_file)
+    print(f"Run metadata saved to {meta_path}")
     model = get_model(args.model, init_args=args)
     grader_model = get_model(model_name=args.grader_model, init_args=args)
 
@@ -115,6 +135,8 @@ async def main(args):
         max_tokens=args.max_tokens,
         temperature=args.temperature,
         grader_temperature=args.grader_temperature,
+        checkpoint_path=args.checkpoint_file,
+        resume=args.resume,
     )
 
     dir_name = os.path.dirname(args.output_file)

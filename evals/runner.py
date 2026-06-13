@@ -30,25 +30,39 @@ class Runner:
         self.model = model
         self.grader_model = grader_model
 
-    async def run(self, max_tokens: int, temperature: float, grader_temperature: float, checkpoint_path: str | None = None, resume: bool = False):
+    async def run(self, max_tokens: int, temperature: float, grader_temperature: float, checkpoint_path: str | None = None, resume: bool = False, max_concurrency: int = 8):
         """Runs the evaluation process on the dataset using the model and grader_model."""
         checkpoint = Checkpoint(checkpoint_path, resume=resume)
         done = checkpoint.completed_indices
-        answers = await self._call_model(
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+          # Figure out what rows still need processing
+        todo = [
+            (index, item)
+            for index, item in enumerate(self.dataset)
+            if index not in done
+        ]
 
-        evaluations = await self._evaluate_completions(
-            answers,
-            max_tokens=max_tokens,
-            temperature=grader_temperature,
-        )
+        if done:
+            print(f"Resuming: {len(done)} rows already complete, {len(todo)} remaining")
 
-        grades = self._extract_grades(evaluations)
+        print(f"Running evaluation against {self.model.model_name}")
+        print(f"Grading against {self.grader_model.model_name}")
+        semaphore = asyncio.Semaphore(max_concurrency)
 
-        results = []
+        async def process_with_limit(index: int, item: dict):
+            async with semaphore:
+                return await self._process_row(index, item, max_tokens, temperature, grader_temperature)
+        tasks = [
+              asyncio.create_task(
+                  process_with_limit(index, item)
+              )
+              for index, item in todo
+          ]        
 
+        new_results = await asyncio.gather(*tasks)
+        for result in new_results:
+            checkpoint.record(result)
+        print("Evaluation complete!")
+        results = checkpoint.results() if checkpoint_path else new_results
         console = Console()
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Question")
@@ -57,16 +71,14 @@ class Runner:
         table.add_column("Grader Output")
         table.add_column("Grade")
 
-        for item, completion, evaluation, grade in zip(
-            self.dataset, answers, evaluations, grades
-        ):
-            result = item.copy()
-            result["model_output"] = completion
-            result["grader_output"] = evaluation
-            result["grade"] = grade
-            results.append(result)
-
-            table.add_row(*result.values())
+        for result in results:
+            table.add_row(
+                result.get("QUESTION", ""),
+                result.get("ANSWER", ""),
+                result.get("model_output", ""),
+                result.get("grader_output", ""),
+                result.get("grade", "")
+         )
 
         console.print(table)
         return results
@@ -127,3 +139,42 @@ class Runner:
                 ratings.append("eval_error")
 
         return ratings
+    def _extract_grade(self, evaluation: str) -> str:
+        """Extract grade from a single evaluation."""
+        match = re.search("Grade: .", evaluation)
+        if match is not None:
+            return evaluation[match.end() - 1]
+        else:
+            return "eval_error"
+    async def _process_row(self, index: int, item: dict, max_tokens: int, temperature: float, grader_temperature: float) -> dict:
+        """Process a single row: answer and grade it."""
+        result = item.copy()
+        result["index"] = index
+
+        try:
+            # Get answer
+              answer = await self.model.generate(
+                  prompt=self.question_prompt_template.format(question=item["QUESTION"]),
+                  model_args={"max_tokens": max_tokens, "temperature": temperature}
+              )
+
+              # Get grade
+              grading_prompt = self.evaluation_prompt_template.format(
+                  response=answer, answer=item["ANSWER"], question=item["QUESTION"]
+              )
+              evaluation = await self.grader_model.generate(
+                  prompt=grading_prompt,
+                  model_args={"max_tokens": max_tokens, "temperature": grader_temperature}
+              )
+
+              result["model_output"] = answer
+              result["grader_output"] = evaluation
+              result["grade"] = self._extract_grade(evaluation)
+        except Exception as e:
+            # If this row fails, record the error but continue
+            result["model_output"] = ""
+            result["grader_output"] = ""
+            result["grade"] = "eval_error"
+            result["error"] = str(e)
+            print(f"Error processing row {index}: {e}")
+        return result

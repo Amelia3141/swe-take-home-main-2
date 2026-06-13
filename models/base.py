@@ -8,7 +8,7 @@ class BaseLM(abc.ABC):
     model_name: str
 
     @abc.abstractmethod
-    def generate(
+    async def generate(
         self,
         prompt: str,
         model_args: dict[str, Any] = {},

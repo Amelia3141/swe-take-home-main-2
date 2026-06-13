@@ -1,7 +1,7 @@
 from openai import OpenAI
 from typing import Any
 from .base import BaseLM
-from ._retry import retry
+#from ._retry import retry
 
 
 def is_openai_model(model_name: str) -> bool:
@@ -30,8 +30,7 @@ class OpenaiLM(BaseLM):
         self.client = OpenAI(api_key=api_key)
 
     def generate(self, prompt: str, model_args: dict[str, Any] = {}) -> str:
-        response = retry(
-            self.client.chat.completions.create,
+        response = self.client.chat.completions.create(
             model=self.model_name,
             messages=[
                 {

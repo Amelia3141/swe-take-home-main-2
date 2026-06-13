@@ -1,27 +1,43 @@
-import time
+import asyncio
+import logging
+import random
+from typing import Awaitable, Callable, TypeVar
+from dataclasses import dataclass, field
 
+logger = logging.getLogger(__name__)
+T = TypeVar('T')
+@dataclass(frozen=True)
+class RetryConfig:
+    max_attempts: int = 4
+    base_delay: float = 1.0
+    max_delay: float = 30.0
+    jitter: bool = True
+    exceptions: tuple[type[Exception], ...] = field(default=(Exception,))
 
-def retry(func, *args, **kwargs):
-    """Call a function, if it fails then retry after 1s. Retry it up to three
-    times. This is not a very good retry implementation.
-
-    Args:
-        func: Function to call
-        *args: Arguments to pass to the function
-        **kwargs: Keyword arguments to pass to the function
-
-    Returns:
-        If successful, return the result of the function call. If unsuccessful,
-        after all retries, return None.
+async def async_retry(
+    func: Callable[..., Awaitable[T]],
+    *args,
+    config: RetryConfig = RetryConfig(),
+    **kwargs,
+) -> T:
+    """Call an awaitable-returning function, retrying with exponential backoff.
+    Re-raises the final exception if all attempts fail.
     """
-    for attempt in range(1, 5):
+    for attempt in range(config.max_attempts):
         try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            print(
-                f"Failed to call function {attempt} time(s). Waiting 1s, exception: {e}"
+            return await func(*args, **kwargs)
+        except config.exceptions as e:
+            if attempt == config.max_attempts - 1:
+                raise
+            delay = min(config.base_delay * (2**attempt), config.max_delay)
+            if config.jitter:
+                delay *= 0.5 + random.random() / 2
+            logger.warning(
+                "Call failed (attempt %d/%d), retrying in %.2fs: %r",
+                attempt + 1,
+                config.max_attempts,
+                delay,
+                e,
             )
-            time.sleep(1)
-            continue
-
-    return None
+            await asyncio.sleep(delay)
+    raise AssertionError("async_retry exhausted its loop without returning")

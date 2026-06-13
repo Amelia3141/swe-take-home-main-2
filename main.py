@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import csv
 import os
 import pandas as pd
@@ -89,7 +90,7 @@ def get_parser():
     return parser
 
 
-def main(args):
+async def main(args):
     """
     This parses various args, runs the evaluation and writes the results to a CSV file.
 
@@ -110,7 +111,7 @@ def main(args):
         grader_model=grader_model,
     )
 
-    results = runner.run(
+    results = await runner.run(
         max_tokens=args.max_tokens,
         temperature=args.temperature,
         grader_temperature=args.grader_temperature,
@@ -127,4 +128,4 @@ if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
 
-    main(args)
+    asyncio.run(main(args))

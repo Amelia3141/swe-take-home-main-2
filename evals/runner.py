@@ -1,8 +1,10 @@
 import re
+import asyncio
 from tqdm import tqdm
 from rich.console import Console
 from rich.table import Table
 from models.base import BaseLM
+from evals.checkpoint import Checkpoint
 
 
 class Runner:
@@ -28,14 +30,16 @@ class Runner:
         self.model = model
         self.grader_model = grader_model
 
-    def run(self, max_tokens: int, temperature: float, grader_temperature: float):
+    async def run(self, max_tokens: int, temperature: float, grader_temperature: float, checkpoint_path: str | None = None, resume: bool = False):
         """Runs the evaluation process on the dataset using the model and grader_model."""
-        answers = self._call_model(
+        checkpoint = Checkpoint(checkpoint_path, resume=resume)
+        done = checkpoint.completed_indices
+        answers = await self._call_model(
             max_tokens=max_tokens,
             temperature=temperature,
         )
 
-        evaluations = self._evaluate_completions(
+        evaluations = await self._evaluate_completions(
             answers,
             max_tokens=max_tokens,
             temperature=grader_temperature,
@@ -67,44 +71,46 @@ class Runner:
         console.print(table)
         return results
 
-    def _call_model(self, max_tokens: int, temperature: float):
+    async def _call_model(self, max_tokens: int, temperature: float):
         print(f"Running evaluation against {self.model.model_name}")
-        answers = []
 
-        for item in tqdm(self.dataset):
-            answer = self.model.generate(
-                prompt=self.question_prompt_template.format(question=item["QUESTION"]),
-                model_args={
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                },
+        tasks = [
+            asyncio.create_task(
+                self.model.generate(
+                    prompt=self.question_prompt_template.format(question=item["QUESTION"]),
+                    model_args={
+                        "max_tokens": max_tokens,
+                        "temperature": temperature, 
+                    },
+                )
             )
+            for item in self.dataset
+        ]
 
-            answers.append(answer)
+        answers = await asyncio.gather(*tasks)
 
         print("Evaluation complete!")
         return answers
 
-    def _evaluate_completions(
+    async def _evaluate_completions(
         self, completions: list[str], max_tokens: int, temperature: float
     ):
         print(f"Grading against {self.grader_model.model_name}")
-        graded_completions = []
-        for completion, item in tqdm(list(zip(completions, self.dataset))):
-            grading_prompt = self.evaluation_prompt_template.format(
-                response=completion, answer=item["ANSWER"], question=item["QUESTION"]
+        tasks = [
+            asyncio.create_task(
+                self.grader_model.generate(
+                    prompt=self.evaluation_prompt_template.format(
+                        response=completion, answer=item["ANSWER"], question=item["QUESTION"]
+                    ),
+                    model_args={
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                    }
+                )
             )
-
-            graded_response = self.grader_model.generate(
-                prompt=grading_prompt,
-                model_args={
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                },
-            )
-
-            graded_completions.append(graded_response)
-
+            for completion, item in zip(completions, self.dataset)
+        ]
+        graded_completions = await asyncio.gather(*tasks)
         print("Grading complete!")
         return graded_completions
 

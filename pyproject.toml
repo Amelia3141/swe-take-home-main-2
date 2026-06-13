@@ -1,0 +1,20 @@
+[project]
+name = "swe-take-home"
+version = "0.1.0"
+description = "Take-home assignment for the SWE position at AISI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate==1.5.2",
+    "anthropic==0.49.0",
+    "debugpy==1.8.13",
+    "jsonlines==4.0.0",
+    "openai==1.69.0",
+    "pandas==2.2.3",
+    "pandas-stubs==2.2.3.250308",
+    "rich>=14.0.0",
+    "torch==2.6.0",
+    "tqdm==4.67.1",
+    "transformers==4.50.2",
+    "types-tqdm==4.67.0.20250319",
+]

@@ -1,0 +1,13 @@
+An user was tasked with finishing the following sentence within <question> tags with a single word:
+
+<question>{question}</question>
+
+The answer they gave is contained in the following <response> tags:
+
+<response>{response}</response>
+
+The actual answer is contained in the following <answer> tags:
+
+<answer>{answer}</answer>
+
+Your task is to grade whether this answer is correct or not. You can reason about whether or not it is correct, but your final response must contain the text "Grade: " followed by the grade. The grade must be either "CORRECT" or "INCORRECT".

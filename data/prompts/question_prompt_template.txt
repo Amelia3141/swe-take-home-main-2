@@ -1,0 +1,3 @@
+Complete the following sentence on the next line with a single word, make sure to return no more output than the single word required to finish the sentence:
+
+{question}

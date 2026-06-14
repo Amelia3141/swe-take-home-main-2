@@ -11,7 +11,7 @@ class BaseLM(abc.ABC):
     async def generate(
         self,
         prompt: str,
-        model_args: dict[str, Any] = {},
+        model_args: dict[str, Any] | None = None,
     ) -> str:
         """Generate a response from the model given a prompt and model arguments."""
         pass

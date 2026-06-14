@@ -2,5 +2,11 @@
 .ruff_cache
 __pycache__
 .mypy_cache
+.pytest_cache
+.claude
+.DS_Store
 
+# Run artifacts
 output.csv
+*.meta.json
+*.jsonl

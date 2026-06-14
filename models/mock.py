@@ -10,5 +10,5 @@ class MockLM(BaseLM):
 
     model_name: str = "mock-model"
 
-    async def generate(self, prompt: str, model_args: dict[str, Any] = {}) -> str:
+    async def generate(self, prompt: str, model_args: dict[str, Any] | None = None) -> str:
         return "mocked response"

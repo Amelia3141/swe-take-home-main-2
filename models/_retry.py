@@ -2,17 +2,23 @@ import asyncio
 import logging
 import random
 from typing import Awaitable, Callable, TypeVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 T = TypeVar('T')
+
+
 @dataclass(frozen=True)
 class RetryConfig:
     max_attempts: int = 4
     base_delay: float = 1.0
     max_delay: float = 30.0
     jitter: bool = True
-    exceptions: tuple[type[Exception], ...] = field(default=(Exception,))
+    # Permissive by default — a correct backoff over any failure. Narrowing this
+    # to provider-specific transient errors (so auth/4xx fail fast instead of
+    # burning the full attempt budget) is a deliberate next step, not yet wired
+    # into the adapters.
+    exceptions: tuple[type[Exception], ...] = (Exception,)
 
 async def async_retry(
     func: Callable[..., Awaitable[T]],
@@ -31,6 +37,8 @@ async def async_retry(
                 raise
             delay = min(config.base_delay * (2**attempt), config.max_delay)
             if config.jitter:
+                # Randomise within [0.5x, 1x] so many clients retrying after the
+                # same outage don't synchronise into a thundering herd.
                 delay *= 0.5 + random.random() / 2
             logger.warning(
                 "Call failed (attempt %d/%d), retrying in %.2fs: %r",

@@ -1,7 +1,7 @@
 from openai import AsyncOpenAI
 from typing import Any
 from .base import BaseLM
-from ._retry import async_retry, RetryConfig
+from ._retry import async_retry
 
 
 def is_openai_model(model_name: str) -> bool:
@@ -29,7 +29,8 @@ class OpenaiLM(BaseLM):
         self.model_name = model_name
         self.client = AsyncOpenAI(api_key=api_key)
 
-    async def generate(self, prompt: str, model_args: dict[str, Any] = {}) -> str:
+    async def generate(self, prompt: str, model_args: dict[str, Any] | None = None) -> str:
+        model_args = model_args or {}
         response = await async_retry(
             self.client.chat.completions.create,
             model=self.model_name,
@@ -44,4 +45,4 @@ class OpenaiLM(BaseLM):
             max_tokens=model_args["max_tokens"],
         )
 
-        return response.choices[0].message.content
+        return response.choices[0].message.content or ""

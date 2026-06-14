@@ -18,3 +18,12 @@ dependencies = [
     "transformers==4.50.2",
     "types-tqdm==4.67.0.20250319",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.5",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

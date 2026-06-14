@@ -5,9 +5,8 @@ import os
 import pandas as pd
 from evals.runner import Runner
 from models.models import get_model
-from evals.metadata import write_run_metadata
 
-def load_dataset(path: str, start_index: int, end_index: int) -> list[dict]:
+def load_dataset(path: str, start_index: int, end_index: int | None) -> list[dict]:
     dataset = pd.read_csv(path).to_dict("records")
     return dataset[start_index:end_index]
 
@@ -53,7 +52,8 @@ def get_parser():
 
     # Grader model configuration
     parser.add_argument("--grader_temperature", type=float, default=1.0)
-      # Checkpoint configuration
+
+    # Checkpoint configuration
     parser.add_argument(
         "--checkpoint_file",
         type=str,
@@ -95,8 +95,8 @@ def get_parser():
     parser.add_argument(
         "--end_index",
         type=int,
-        default=-1,
-        help="Last row to evaluate in dataset, 0-indexed (default: -1)",
+        default=None,
+        help="Last row to evaluate in dataset, exclusive (default: end of dataset)",
     )
 
     parser.add_argument(
@@ -118,8 +118,6 @@ async def main(args):
     question_prompt_template = open(args.question_prompt_template, mode="r").read()
     evaluation_prompt_template = open(args.evaluation_prompt_template, mode="r").read()
     dataset = load_dataset(args.eval_dataset, args.start_index, args.end_index)
-    meta_path = write_run_metadata(args, args.output_file)
-    print(f"Run metadata saved to {meta_path}")
     model = get_model(args.model, init_args=args)
     grader_model = get_model(model_name=args.grader_model, init_args=args)
 
@@ -137,6 +135,7 @@ async def main(args):
         grader_temperature=args.grader_temperature,
         checkpoint_path=args.checkpoint_file,
         resume=args.resume,
+        max_concurrency=args.max_concurrency,
     )
 
     dir_name = os.path.dirname(args.output_file)

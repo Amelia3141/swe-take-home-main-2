@@ -1,3 +1,4 @@
+import asyncio
 import torch
 from typing import Any
 from transformers import (
@@ -89,23 +90,32 @@ class HuggingfaceLM(BaseLM):
         )
         self.model.to(self.device)
 
-    def generate(self, prompt: str, model_args: dict[str, Any] = {}) -> str:
+    async def generate(self, prompt: str, model_args: dict[str, Any] | None = None) -> str:
+        # The HF generate call is blocking/CPU-bound, so run it off the event
+        # loop to keep `await`-ing callers (the runner) concurrent.
+        return await asyncio.to_thread(self._generate, prompt, model_args or {})
+
+    def _generate(self, prompt: str, model_args: dict[str, Any]) -> str:
         tokenizer_outputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
         tokenizer_outputs = tokenizer_outputs.to(self.device)
 
         input_ids = tokenizer_outputs["input_ids"]
         input_ids = input_ids.to(self.device)
 
-        old_bos_token = self.tokenizer.add_bos_token
-        # Don't add bos token to the stopping tokens
-        self.tokenizer.add_bos_token = False
+        # `stop` is optional; only build stopping criteria when it's supplied.
+        stop_criteria = None
+        stop = model_args.get("stop")
+        if stop:
+            old_bos_token = self.tokenizer.add_bos_token
+            # Don't add bos token to the stopping tokens
+            self.tokenizer.add_bos_token = False
 
-        stop_token_ids = self.tokenizer.encode(
-            model_args["stop"], return_tensors="pt"
-        ).to(self.device)
-        stop_criteria = StoppingCriteriaList([StopOnTokens(stop_token_ids)])
+            stop_token_ids = self.tokenizer.encode(stop, return_tensors="pt").to(
+                self.device
+            )
+            stop_criteria = StoppingCriteriaList([StopOnTokens(stop_token_ids)])
 
-        self.tokenizer.add_bos_token = old_bos_token
+            self.tokenizer.add_bos_token = old_bos_token
 
         outputs = self.model.generate(
             **tokenizer_outputs,
@@ -119,6 +129,6 @@ class HuggingfaceLM(BaseLM):
             for output, input_tokens in zip(outputs, tokenizer_outputs["input_ids"])
         ]
 
-        output = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
-        return output
+        return decoded[0] if decoded else ""
